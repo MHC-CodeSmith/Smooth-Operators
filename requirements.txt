@@ -1,0 +1,6 @@
+numpy<2
+matplotlib>=3.5.0
+roboticstoolbox-python>=1.0.0
+spatialmath-python>=1.0.0
+swift-sim>=1.0.0
+PyQt5>=5.15.0 
