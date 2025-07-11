@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Simulação do Robô RRRP - kinematics_planner.py (Versão 3.0 - Trajetória Complexa)
+Simulação do Robô RRRP - kinematics_planner_matlab.py (Versão MATLAB)
 
-Autor: André MK022 (Cuca) - Adaptado por Gemini com base em nova regra de trajetória
-Descrição: Implementa a geração de uma trajetória complexa onde a junta prismática (d4)
-se move em função do ângulo da junta 2 (theta2), conforme especificado.
+Autor: André MK022 (Cuca) - Adaptado por Gemini para replicar a lógica do MATLAB.
+Descrição: Implementa a geração de trajetória seguindo exatamente as regras e
+parâmetros do script MATLAB fornecido pelo usuário.
 """
 import numpy as np
 
@@ -17,15 +17,12 @@ except ImportError:
 
 def create_rrrp_robot_from_dh():
     """
-    Cria um robô RRRP com base nos parâmetros DH e dimensões reais.
+    Cria um robô RRRP com base nos parâmetros DH do script MATLAB.
     """
-    # --- ALTERADO AQUI: Dimensões Reais Atualizadas ---
-    # L2=300mm, L3=29.5mm
+    # --- PARÂMETROS IGUAIS AO MATLAB ---
     l2 = 0.3
-    l3 = 0.0295 # Valor atualizado
-    
-    # Limites de d4: -20mm a 105mm
-    d4_lim = [-0.02, 0.105]
+    l3 = 0.03  # Valor usado no MATLAB
+    d4_lim = [0, 0.105] # Limites usados no MATLAB
     
     links = []
     if ROBOTICS_TOOLBOX_AVAILABLE:
@@ -41,51 +38,44 @@ def create_rrrp_robot_from_dh():
 
     return robot_model, l2, l3
 
-def generate_custom_trajectory(N=200):
+def generate_matlab_like_trajectory(N=100):
     """
-    Gera a trajetória onde d4 depende de theta2.
-    - theta2 varre de 0 a 90 graus.
-    - d4 começa em 105mm, vai para -20mm (em theta2=45), e volta para 105mm (em theta2=90).
-    - q3 = pi/2 - q2 para manter a orientação.
+    Gera a trajetória usando a lógica de cálculo do script MATLAB.
     """
-    print("Gerando trajetória customizada (d4 em função de theta2)...")
+    print("Gerando trajetória com a lógica do MATLAB...")
 
-    # 1. Definir o movimento da junta 2 (theta2) de 0 a 90 graus (pi/2)
-    q2_vals = np.linspace(0, np.pi/2, N)
+    # Parâmetros usados no cálculo
+    l2 = 0.3
     
-    # 2. Manter a orientação do efetuador com a regra q3 = pi/2 - q2
+    # 1. Trajetória cartesiana desejada para a posição X (como no MATLAB)
+    x_desejado = np.linspace(0.2, 0.2 + 0.3, N)
+    
+    # 2. Movimentos das juntas definidos como no MATLAB
+    q1_vals = np.zeros(N)
+    q2_vals = np.linspace(np.pi/2, 0, N) # de 90 a 0 graus
     q3_vals = np.pi/2 - q2_vals
     
-    # 3. Manter a junta 1 (base) fixa
-    q1_vals = np.zeros(N)
+    # 3. Cálculo de q4 usando a fórmula exata do MATLAB
+    # q4 = (x_desejado - l2*cos(q2))
+    q4_vals = x_desejado - l2 * np.cos(q2_vals)
     
-    # 4. Gerar a trajetória para a junta 4 (d4)
-    q4_vals = np.zeros(N)
-    ponto_intermediario = N // 2 # Ponto onde theta2 é 45 graus
-    
-    # Parte 1: De 105mm a -20mm (enquanto theta2 vai de 0 a 45 graus)
-    q4_vals[:ponto_intermediario] = np.linspace(0.105, -0.02, ponto_intermediario)
-    
-    # Parte 2: De -20mm de volta a 105mm (enquanto theta2 vai de 45 a 90 graus)
-    q4_vals[ponto_intermediario:] = np.linspace(-0.02, 0.105, N - ponto_intermediario)
-
-    # 5. Monta a matriz de trajetória Q
+    # 4. Monta a matriz de trajetória Q
     Q = np.vstack([q1_vals, q2_vals, q3_vals, q4_vals]).T
     
     return Q
 
 def main():
     """Função principal para gerar e salvar a trajetória."""
-    print("=== Planejador de Trajetória Cinemática (V3.0) ===")
+    print("=== Planejador de Trajetória (Lógica MATLAB) ===")
     
-    q_desejado = generate_custom_trajectory()
+    q_desejado = generate_matlab_like_trajectory()
 
     if q_desejado.size == 0:
         print(f"✗ ERRO: Não foi possível gerar a trajetória.")
         return
 
     np.save('trajetoria_desejada.npy', q_desejado)
-    print(f"\n✓ Trajetória customizada com {len(q_desejado)} pontos foi salva em 'trajetoria_desejada.npy'.")
+    print(f"\n✓ Trajetória com {len(q_desejado)} pontos foi salva em 'trajetoria_desejada.npy'.")
 
 if __name__ == "__main__":
     main()
