@@ -25,25 +25,30 @@ def create_rrrp_robot_from_dh():
     """
     Cria um robô RRRP com base nos parâmetros DH e adiciona massas reais.
     """
+    l2, l3 = 0.3, 0.05
+    
+    m1, m2, m3, m4 = 0.08159, 0.2268, 0.053, 0.0123
+    
+    I1 = np.diag([0.001, 0.001, 0.001])
+    I2 = np.diag([2.36e-3, 0, 0])
+    I3 = np.diag([1.26e-4, 0, 0])
+    I4 = np.diag([2.33e-5, 0, 0])
     l2, l3 = 0.3, 0.03  # conforme tabela
 
-    m2, m3, m4 = 0.2268, 0.053, 0.0123
+
 
     r2 = [0.192, 0, 0]     # CG link 2
     r3 = [0.033, 0, 0]     # CG link 3
     r4 = [0.0736, 0, 0]    # CG link 4
 
-    I2 = np.diag([2.36e-3, 0, 0])
-    I3 = np.diag([1.26e-4, 0, 0])
-    I4 = np.diag([2.33e-5, 0, 0])
 
-        
     links = [
-        RevoluteDH(d=0, a=0, alpha=np.pi/2, m=m1, I=I1),
+        RevoluteDH(d=0, a=0, alpha=np.pi/2),  # Link 1 (base fixa, sem massa informada)
         RevoluteDH(d=0, a=l2, alpha=0, m=m2, r=r2, I=I2),
         RevoluteDH(d=0, a=l3, alpha=np.pi/2, m=m3, r=r3, I=I3),
-        PrismaticDH(theta=0, a=0, alpha=0, qlim=[0, 0.5], m=m4)
+        PrismaticDH(theta=0, a=0, alpha=0, qlim=[0, 0.5], m=m4, r=r4, I=I4)
     ]
+
     
     return SerialLink(links, name='RRRP_Orca_DH_Dinamica')
 
