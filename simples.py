@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-Simulação do Robô RRRP - controller_simulation.py (Versão 3.2 - Sintonia de Ganhos)
+Simulação do Robô RRRP - controller_simulation.py (Versão 3.3 - Plots Corrigidos)
 
 Autor: André MK022 (Cuca) - Adaptado por Gemini com base em novo modelo
-Descrição: Versão focada na sintonia de ganhos PID. Trava a junta 1 (theta_1)
-           zerando seus ganhos e fornece uma estrutura clara para otimizar
-           a performance das outras juntas.
+Descrição: Corrige a plotagem para iniciar em t=0 e remove a visualização
+           da Junta 1 (travada) para focar nas juntas ativas.
 """
 import numpy as np
 import matplotlib
 matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
 import time
-
+# ... outras importações
+from sklearn.metrics import mean_squared_error, r2_score
+from scipy.stats import pearsonr
+# ... outras importações
+import pandas as pd
 # --- Verificação de Bibliotecas ---
 try:
     from roboticstoolbox import DHRobot, RevoluteDH, PrismaticDH, SerialLink
@@ -42,16 +45,15 @@ def create_rrrp_robot_from_dh():
     ]
     return SerialLink(links, name='RRRP_Orca_Sintonia')
 
-# --- Funções de Plotagem e Animação (sem alterações) ---
+# --- Funções de Plotagem e Animação ---
 def calcular_metricas_performance(t, q_des, q_real, erro):
     num_juntas = q_des.shape[1]
     metricas = {}
     
     for i in range(num_juntas):
-        # Ignora métricas para juntas travadas (ganho zero)
-        if np.max(np.abs(q_des[:, i])) == 0 and np.max(np.abs(q_real[:, i])) < 1e-6:
-             metricas[f'junta_{i+1}'] = {'status': 'Travada (ganhos zero)'}
-             continue
+        if i == 0: # Ignora a Junta 1 travada
+            metricas[f'junta_{i+1}'] = {'status': 'Travada (ganhos zero)'}
+            continue
 
         # Sobressinal
         max_des = np.max(q_des[:, i])
@@ -60,11 +62,8 @@ def calcular_metricas_performance(t, q_des, q_real, erro):
         amplitude_des = max_des - min_des
         
         sobressinal = 0
-        if amplitude_des > 1e-6:
-            if max_des > 0:
-                sobressinal = ((pico_real - max_des) / amplitude_des) * 100
-            else: # Movimento negativo
-                sobressinal = ((pico_real - min_des) / amplitude_des) * 100
+        if amplitude_des > 1e-9: # Aumentada a tolerância para evitar divisão por zero
+            sobressinal = ((pico_real - max_des) / amplitude_des) * 100
 
         # Erro de regime (últimos 20% da simulação)
         n_final = int(0.2 * len(erro))
@@ -72,60 +71,204 @@ def calcular_metricas_performance(t, q_des, q_real, erro):
         
         # Tempo de estabilização (quando erro fica < 2% da amplitude do movimento)
         try:
-            threshold = 0.02 * amplitude_des if amplitude_des > 1e-6 else 0.001
+            threshold = 0.02 * amplitude_des if amplitude_des > 1e-9 else 0.001
             indices_fora_faixa = np.where(np.abs(erro[:, i]) > threshold)[0]
             ultimo_fora_da_faixa = indices_fora_faixa[-1] if len(indices_fora_faixa) > 0 else 0
             tempo_estab = t[ultimo_fora_da_faixa]
-        except:
+        except IndexError:
             tempo_estab = t[-1] # Se nunca estabilizar, retorna o tempo total
 
         metricas[f'junta_{i+1}'] = {
-            'sobressinal_%': max(0, sobressinal), # Evita sobressinal negativo se não houver
+            'sobressinal_%': max(0, sobressinal),
             'erro_regime': erro_regime,
             'tempo_estab_s': tempo_estab
         }
     return metricas
 
+def analise_avancada_de_erro(t, erro_total):
+    """
+    Realiza uma análise avançada do erro de controle ao longo do tempo,
+    gerando um painel de diagnósticos para cada junta ativa com cores de alto contraste.
+    """
+    num_juntas = erro_total.shape[1]
+    titulos_juntas = ['Junta 1 (θ₁)', 'Junta 2 (θ₂)', 'Junta 3 (θ₃)', 'Junta 4 (d₄)']
+
+    print("\n" + "="*40)
+    print(" ANÁLISE AVANÇADA DE ERRO POR JUNTA")
+    print("="*40)
+
+    for i in range(1, num_juntas): # Pula a Junta 1
+        erro_junta = erro_total[:, i]
+
+        # --- Cálculos Estatísticos Gerais ---
+        mean_err = np.mean(erro_junta)
+        std_err = np.std(erro_junta)
+        max_err = np.max(erro_junta)
+        min_err = np.min(erro_junta)
+
+        print(f"\n--- Estatísticas para {titulos_juntas[i].upper()} ---")
+        print(f"  - Erro Médio:         {mean_err:.6f}")
+        print(f"  - Desvio Padrão (σ):  {std_err:.6f}")
+        print(f"  - Erro Máximo:        {max_err:.6f}")
+        print(f"  - Erro Mínimo:        {min_err:.6f}")
+
+        # --- Cálculos de Janela Móvel ---
+        window_size = 50
+        df = pd.DataFrame(erro_junta)
+        moving_avg = df.rolling(window=window_size, min_periods=1).mean()
+        moving_std = df.rolling(window=window_size, min_periods=1).std()
+
+        # --- Geração do Painel de Gráficos ---
+        fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+        fig.suptitle(f'Painel de Análise de Erro - {titulos_juntas[i]}', fontsize=18)
+
+        # 1. Erro vs. Tempo com Bandas de Desvio Padrão (CORES MELHORADAS)
+        ax1 = axs[0, 0]
+        ax1.plot(t, erro_junta, color='limegreen', linewidth=2.0, label='Erro Instantâneo') # << COR E ESPESSURA
+        ax1.axhline(mean_err, color='crimson', linestyle='--', linewidth=1.5, label=f'Média ({mean_err:.3f})') # << COR E ESPESSURA
+        ax1.axhline(mean_err + std_err, color='darkorange', linestyle='-.', linewidth=1.5, label=f'Média + 1σ ({std_err:.3f})') # << COR, ESTILO E ESPESSURA
+        ax1.axhline(mean_err - std_err, color='darkorange', linestyle='-.', linewidth=1.5, label='Média - 1σ') # << COR, ESTILO E ESPESSURA
+        ax1.set_title('Erro ao Longo do Tempo e Desvio Padrão')
+        ax1.set_xlabel('Tempo (s)')
+        ax1.set_ylabel('Erro')
+        ax1.legend()
+        ax1.grid(True, linestyle=':')
+
+        # 2. Histograma da Distribuição do Erro
+        ax2 = axs[0, 1]
+        ax2.hist(erro_junta, bins=50, alpha=0.75, color='mediumblue') # << COR
+        ax2.axvline(mean_err, color='crimson', linestyle='--', linewidth=1.5, label=f'Média ({mean_err:.3f})') # << COR E ESPESSURA
+        ax2.set_title('Distribuição do Erro (Histograma)')
+        ax2.set_xlabel('Valor do Erro')
+        ax2.set_ylabel('Frequência')
+        ax2.legend()
+        ax2.grid(True, linestyle=':')
+
+        # 3. Média Móvel do Erro (VISIBILIDADE MELHORADA)
+        ax3 = axs[1, 0]
+        ax3.plot(t, erro_junta, color='lightgray', linewidth=1.5, label='Erro Original') # << COR E ESPESSURA
+        ax3.plot(t, moving_avg, color='blue', linewidth=2.5, label=f'Média Móvel (Janela={window_size})') # << COR E ESPESSURA
+        ax3.set_title('Tendência do Erro (Média Móvel)')
+        ax3.set_xlabel('Tempo (s)')
+        ax3.set_ylabel('Erro')
+        ax3.legend()
+        ax3.grid(True, linestyle=':')
+
+        # 4. Desvio Padrão Móvel
+        ax4 = axs[1, 1]
+        ax4.plot(t, moving_std, color='darkviolet', linewidth=2, label=f'Desvio Padrão Móvel (Janela={window_size})') # << COR
+        ax4.set_title('Variabilidade do Erro (Desvio Padrão Móvel)')
+        ax4.set_xlabel('Tempo (s)')
+        ax4.set_ylabel('Desvio Padrão (σ)')
+        ax4.legend()
+        ax4.grid(True, linestyle=':')
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.show(block=True)
+
+def plotar_trajetoria_endeffector_xz(robot, q_des, q_real):
+    """
+    Calcula a cinemática direta e plota a trajetória do end-effector (TCP)
+    desejada vs. a real no plano XZ.
+    """
+    print("\n" + "="*45)
+    print(" ANÁLISE DA TRAJETÓRIA DO END-EFFECTOR (PLANO XZ)")
+    print("="*45)
+
+    # 1. Calcular a cinemática direta para toda a trajetória
+    # Isso converte o ângulo de cada junta em uma posição (x,y,z) do end-effector
+    T_desejado = robot.fkine(q_des)
+    T_real = robot.fkine(q_real)
+
+    # 2. Extrair as coordenadas de translação (x, y, z)
+    caminho_desejado_xyz = T_desejado.t
+    caminho_real_xyz = T_real.t
+
+    # --- Cálculo do Erro Cartesiano ---
+    erro_cartesiano = np.linalg.norm(caminho_desejado_xyz - caminho_real_xyz, axis=1)
+    erro_medio_cartesiano = np.mean(erro_cartesiano)
+    erro_max_cartesiano = np.max(erro_cartesiano)
+    print(f"  - Erro Cartesiano Médio (distância): {erro_medio_cartesiano*1000:.3f} mm")
+    print(f"  - Erro Cartesiano Máximo (distância): {erro_max_cartesiano*1000:.3f} mm")
+
+
+    # --- Geração do Gráfico 2D (Plano XZ) ---
+    plt.figure(figsize=(12, 10))
+    
+    # Plot da trajetória desejada
+    plt.plot(caminho_desejado_xyz[:, 0], caminho_desejado_xyz[:, 2], 
+             color='crimson', linestyle='--', linewidth=3, label='TCP Desejado')
+    
+    # Plot da trajetória real
+    plt.plot(caminho_real_xyz[:, 0], caminho_real_xyz[:, 2], 
+             color='deepskyblue', linestyle='-', linewidth=2.5, label='TCP Real')
+
+    # Marcar pontos de início e fim
+    plt.scatter(caminho_desejado_xyz[0, 0], caminho_desejado_xyz[0, 2], s=100, c='red', marker='o', label='Início', zorder=5)
+    plt.scatter(caminho_desejado_xyz[-1, 0], caminho_desejado_xyz[-1, 2], s=100, c='black', marker='x', label='Fim', zorder=5)
+
+    plt.title('Trajetória do End-Effector no Plano XZ', fontsize=18)
+    plt.xlabel('Eixo X (m)', fontsize=12)
+    plt.ylabel('Eixo Z (m)', fontsize=12)
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle=':')
+    
+    # ESSENCIAL: Garante que a escala dos eixos X e Z seja a mesma,
+    # para que um círculo não pareça uma elipse.
+    plt.axis('equal') 
+    
+    plt.show(block=True)
+
 def plotar_resultados_finais(t, q_des, q_real, erro, torque):
     num_juntas = q_des.shape[1]
     titulos_juntas = ['Junta 1 (θ₁)', 'Junta 2 (θ₂)', 'Junta 3 (θ₃)', 'Junta 4 (d₄)']
     unidades = ['rad', 'rad', 'rad', 'm']
-    
-    plt.figure(figsize=(15, 10))
-    for i in range(num_juntas):
-        plt.subplot(num_juntas, 1, i+1)
-        plt.plot(t, q_des[:, i], 'r--', label='Desejado', linewidth=2)
-        plt.plot(t, q_real[:, i], 'b-', label='Obtido', linewidth=1.5)
-        plt.title(f'Seguimento de Trajetória - {titulos_juntas[i]}')
-        plt.ylabel(f'Posição ({unidades[i]})')
-        plt.grid(True, linestyle=':', alpha=0.6)
-        plt.legend()
-    plt.xlabel('Tempo (s)')
-    plt.tight_layout()
+
+    # --- Figura 1: Posição ---
+    fig1, axs1 = plt.subplots(num_juntas - 1, 1, figsize=(15, 8), sharex=True)
+    fig1.suptitle('Seguimento de Trajetória', fontsize=16)
+    for i in range(1, num_juntas):
+        ax = axs1[i-1]
+        # Usando um vermelho vivo e um azul-celeste para alto contraste
+        ax.plot(t, q_des[:, i], color='crimson', linestyle='--', label='Desejado', linewidth=2.5) ## << MUDANÇA
+        ax.plot(t, q_real[:, i], color='deepskyblue', linestyle='-', label='Obtido', linewidth=2)    ## << MUDANÇA
+        ax.set_title(titulos_juntas[i])
+        ax.set_ylabel(f'Posição ({unidades[i]})')
+        ax.grid(True, linestyle=':', alpha=0.7)
+        ax.legend()
+    plt.xlabel('Tempo (s)', fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show(block=True)
 
-    plt.figure(figsize=(15, 8))
-    for i in range(num_juntas):
-        plt.subplot(2, 2, i+1)
-        plt.plot(t, erro[:, i], 'g-', linewidth=1.5)
-        plt.title(f'Erro de Seguimento - {titulos_juntas[i]}')
-        plt.ylabel(f'Erro ({unidades[i]})')
-        plt.xlabel('Tempo (s)')
-        plt.grid(True, linestyle=':', alpha=0.6)
-    plt.tight_layout()
+    # --- Figura 2: Erro ---
+    fig2, axs2 = plt.subplots(num_juntas - 1, 1, figsize=(15, 8), sharex=True)
+    fig2.suptitle('Erro de Seguimento', fontsize=16)
+    for i in range(1, num_juntas):
+        ax = axs2[i-1]
+        # Laranja escuro é excelente para destacar o erro contra o fundo branco
+        ax.plot(t, erro[:, i], color='darkorange', linewidth=2) ## << MUDANÇA
+        ax.set_title(titulos_juntas[i])
+        ax.set_ylabel(f'Erro ({unidades[i]})')
+        ax.grid(True, linestyle=':', alpha=0.7)
+    plt.xlabel('Tempo (s)', fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show(block=True)
 
-    plt.figure(figsize=(15, 8))
-    for i in range(num_juntas):
-        plt.subplot(2, 2, i+1)
-        plt.plot(t, torque[:, i], 'm-', linewidth=1.5)
-        plt.title(f'Torque Aplicado - {titulos_juntas[i]}')
-        plt.ylabel('Torque/Força (N.m/N)')
-        plt.xlabel('Tempo (s)')
-        plt.grid(True, linestyle=':', alpha=0.6)
-    plt.tight_layout()
+    # --- Figura 3: Torque ---
+    fig3, axs3 = plt.subplots(num_juntas - 1, 1, figsize=(15, 8), sharex=True)
+    fig3.suptitle('Torque Aplicado', fontsize=16)
+    for i in range(1, num_juntas):
+        ax = axs3[i-1]
+        # Um roxo/violeta forte se destaca bem
+        ax.plot(t, torque[:, i], color='darkviolet', linewidth=2) ## << MUDANÇA
+        ax.set_title(titulos_juntas[i])
+        ax.set_ylabel('Torque/Força (N.m/N)')
+        ax.grid(True, linestyle=':', alpha=0.7)
+    plt.xlabel('Tempo (s)', fontsize=12)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show(block=True)
 
+    # --- Métricas ---
     metricas = calcular_metricas_performance(t, q_des, q_real, erro)
     print("\n" + "="*25)
     print(" MÉTRICAS DE PERFORMANCE")
@@ -138,7 +281,7 @@ def plotar_resultados_finais(t, q_des, q_real, erro, torque):
             print(f"  - Sobressinal (Overshoot): {metrica['sobressinal_%']:.2f}%")
             print(f"  - Erro de Regime Estacionário: {metrica['erro_regime']:.6f} ({unidades[int(junta[-1])-1]})")
             print(f"  - Tempo de Estabilização (2%): {metrica['tempo_estab_s']:.3f} s")
-
+            
 def animate_simulation_results(robot, dt, q_desejado, q_real):
     if not ROBOTICS_TOOLBOX_AVAILABLE:
         return
@@ -153,7 +296,7 @@ def animate_simulation_results(robot, dt, q_desejado, q_real):
     env.ax.legend()
     time.sleep(1)
     
-    for q in q_real[::5, :]: # Plota a cada 5 frames para acelerar a animação
+    for q in q_real[::5, :]:
         robot.q = q
         env.step(dt*5)
     
@@ -161,7 +304,7 @@ def animate_simulation_results(robot, dt, q_desejado, q_real):
     plt.show(block=True)
 
 def main():
-    print("=== Simulador de Controle Dinâmico (V3.2 - Sintonia de Ganhos) ===")
+    print("=== Simulador de Controle Dinâmico (V3.3 - Plots Corrigidos) ===")
     visualizar_animacao = True
     if visualizar_animacao and not ROBOTICS_TOOLBOX_AVAILABLE:
         print("AVISO: Robotics Toolbox não encontrado. A animação visual será pulada.")
@@ -172,39 +315,22 @@ def main():
     try:
         q_desejado = np.load('trajetoria_desejada.npy')
         print(f"Trajetória com {len(q_desejado)} pontos carregada com sucesso.")
-        # Garante que a trajetória desejada para a junta 1 seja zero.
         q_desejado[:, 0] = 0
     except FileNotFoundError:
         print("ERRO CRÍTICO: Arquivo 'trajetoria_desejada.npy' não encontrado.")
-        print("Certifique-se que o arquivo de trajetória está na mesma pasta que este script.")
         return
 
     dt = 0.01
     t = np.arange(0, len(q_desejado) * dt, dt)
-    # Calcula a velocidade desejada usando gradiente, mais robusto que np.diff
     qd_desejado = np.gradient(q_desejado, dt, axis=0)
-    # Calcula a aceleração desejada (usada em alguns controladores, mas não aqui)
     qdd_desejado = np.gradient(qd_desejado, dt, axis=0)
 
-    # --- CONFIGURAÇÃO DOS GANHOS DE CONTROLE (ÁREA DE SINTONIA) ---
-    #
-    # INSTRUÇÕES:
-    # 1. Altere os valores abaixo para testar diferentes ganhos.
-    # 2. A primeira junta (θ₁) está travada (ganhos = 0).
-    # 3. Os ganhos são para [Junta1, Junta2, Junta3, Junta4] respectivamente.
-    #
-    # SUGESTÃO DE PARTIDA:
-    # Kp: [0, 25, 20, 15]  -> Resposta rápida
-    # Kd: [0, 10,  8,  5]  -> Amortecimento para reduzir sobressinal
-    # Ki: [0,  1,  1,  0.5] -> Correção de erro de regime (use valores pequenos!)
-# Perfil: OVERCLOCK (Velocidade Máxima Experimental)
-# AVISO: Alto risco de sobressinal e oscilações. Monitore os gráficos com atenção.
-
-    kp_gains = [0, 400, 400, 200]  # AUMENTO AGRESSIVO em Kp para todas as juntas.
-
-    kd_gains = [0, 60, 50, 40]  # Aumento proporcional em Kd para tentar conter o sobressinal.
-
-    ki_gains = [0, 70, 45, 40]  # Ki mantido para garantir o erro de regime baixo.
+    # --- CONFIGURAÇÃO DOS GANHOS DE CONTROLE ---
+    # Perfil: OVERCLOCK EXTREMO (Teste de Limites)
+    kp_gains = [0, 400, 400, 200]
+    kd_gains = [0, 60, 50, 40]
+    ki_gains = [0, 70, 45, 40]
+    
     Kp = np.diag(kp_gains)
     Kd = np.diag(kd_gains)
     Ki = np.diag(ki_gains)
@@ -220,64 +346,60 @@ def main():
     qd_real = np.zeros_like(q_desejado)
     q_real[0] = q_desejado[0]
     erro_integral = np.zeros(robot.n)
-    hist_erro, hist_torque = [], []
+    
+    # Inicializa histórico com o estado em t=0 (erro inicial, torque zero)
+    erro_inicial = q_desejado[0] - q_real[0]
+    hist_erro, hist_torque = [erro_inicial], [np.zeros(robot.n)]
 
     start_time = time.time()
     for i in range(1, len(t)):
         q = q_real[i-1]
         qd = qd_real[i-1]
-
-        # Erro de posição, velocidade e integral
         erro = q_desejado[i] - q
         erro_deriv = qd_desejado[i] - qd
         erro_integral += erro * dt
-        
-        # Anti-windup: Limita a acumulação do erro integral para evitar instabilidade
         erro_integral = np.clip(erro_integral, -2.0, 2.0)
-
-        # Lei de Controle (Computed Torque Control com PID)
-        # acc_des = qdd_desejado[i] + Kd @ erro_deriv + Kp @ erro + Ki @ erro_integral # Forma completa
+        
         acc_des_compensada = Kp @ erro + Kd @ erro_deriv + Ki @ erro_integral
-
-        # Dinâmica do Robô
+        
         M = robot.inertia(q)
         C = robot.coriolis(q, qd)
         G = robot.gravload(q)
-
-        # Torque/Força calculado
+        
         torque_total = M @ acc_des_compensada + C @ qd + G
-
-        # Armazenamento para plots
+        
         hist_erro.append(erro)
         hist_torque.append(torque_total)
-
-        # Simulação da Dinâmica Direta (o que o robô realmente faria)
-        # A aceleração real é resultado do torque aplicado sobre a dinâmica atual
+        
         qdd_real = np.linalg.inv(M) @ (torque_total - C @ qd - G)
-
-        # Integração Numérica (Euler) para obter a nova velocidade e posição
+        
         qd_real[i] = qd + qdd_real * dt
-        q_real[i] = q + qd * dt # Usar a velocidade do passo anterior (qd) é mais estável
+        q_real[i] = q + qd * dt
         q_real[i, 0] = 0.0
         qd_real[i, 0] = 0.0
+        
     end_time = time.time()
     print(f"Simulação numérica concluída em {end_time - start_time:.2f} segundos.")
 
     if np.isnan(q_real).any() or np.isinf(q_real).any():
-        print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("\n" + "!"*54)
         print("!!! ERRO: INSTABILIDADE NUMÉRICA DETECTADA !!!")
-        print("!!! Verifique os ganhos. Ganhos muito altos (Kp, Ki)")
-        print("!!! ou muito baixos (Kd) podem causar este problema.")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!! Ganhos Kp provavelmente muito altos. O sistema se tornou instável.")
+        print("!"*54 + "\n")
         return
 
     if visualizar_animacao:
         animate_simulation_results(robot, dt, q_desejado, q_real)
 
-    # O primeiro ponto é o inicial, então plotamos a partir do segundo
-    plotar_resultados_finais(t[1:], q_desejado[1:], q_real[1:],
+    # Passa os arrays completos para a função de plotagem
+    plotar_resultados_finais(t, q_desejado, q_real,
                              np.array(hist_erro), np.array(hist_torque))
+    # NOVA CHAMADA PARA ANÁLISE AVANÇADA DE ERRO
+    analise_avancada_de_erro(t, np.array(hist_erro))
+    
+    plotar_trajetoria_endeffector_xz(robot, q_desejado, q_real)
 
+    
     print("\nProcesso finalizado!")
 
 if __name__ == "__main__":
