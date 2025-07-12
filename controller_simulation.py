@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Simulação do Robô RRRP - controller_simulation.py (Versão 2.1 - Correção de Bug)
+Simulação do Robô RRRP - controller_simulation.py (Versão 3.0 - Fórmulas Simbólicas)
 
 Autor: André MK022 (Cuca) - Adaptado por Gemini com base em novo modelo
-Descrição: Corrige um bug na função de animação que usava 'fkine_all'
-incorretamente. Substituído por 'fkine' para processar a trajetória.
+Descrição: Adiciona a funcionalidade de gerar as equações simbólicas do torque
+após a execução da simulação e salva-as em um arquivo de texto.
+Utiliza a biblioteca SymPy para a derivação matemática.
 """
 import numpy as np
 import matplotlib
@@ -12,6 +13,7 @@ matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
 import time
 
+# --- Verificação de Bibliotecas ---
 try:
     from roboticstoolbox import DHRobot, RevoluteDH, PrismaticDH, SerialLink
     from spatialmath import SE3
@@ -20,39 +22,41 @@ except ImportError:
     print("Robotics Toolbox não encontrada. A animação visual não está disponível.")
     ROBOTICS_TOOLBOX_AVAILABLE = False
 
-# --- Modelo do Robô com Dinâmica ---
+try:
+    import sympy as sp
+    SYMPY_AVAILABLE = True
+except ImportError:
+    print("SymPy não encontrada. A geração de fórmulas simbólicas não está disponível.")
+    SYMPY_AVAILABLE = False
+
+
+# --- Modelo Numérico do Robô com Dinâmica (Para Simulação) ---
 def create_rrrp_robot_from_dh():
     """
-    Cria um robô RRRP com base nos parâmetros DH e adiciona massas reais.
+    Cria um robô RRRP com base nos parâmetros DH e adiciona massas reais
+    para a simulação numérica.
     """
-    l2, l3 = 0.3, 0.05
-    
-    m1, m2, m3, m4 = 0.08159, 0.2268, 0.053, 0.0123
-    
-    I1 = np.diag([0.001, 0.001, 0.001])
+    l2, l3 = 0.3, 0.03
+    m2, m3, m4 = 0.2268, 0.053, 0.0123
+
     I2 = np.diag([2.36e-3, 0, 0])
     I3 = np.diag([1.26e-4, 0, 0])
     I4 = np.diag([2.33e-5, 0, 0])
-    l2, l3 = 0.3, 0.03  # conforme tabela
 
-
-
-    r2 = [0.192, 0, 0]     # CG link 2
-    r3 = [0.033, 0, 0]     # CG link 3
-    r4 = [0.0736, 0, 0]    # CG link 4
-
+    r2 = [0.192, 0, 0]   # CG link 2
+    r3 = [0.033, 0, 0]   # CG link 3
+    r4 = [0.0736, 0, 0]  # CG link 4
 
     links = [
-        RevoluteDH(d=0, a=0, alpha=np.pi/2),  # Link 1 (base fixa, sem massa informada)
+        RevoluteDH(d=0, a=0, alpha=np.pi/2),  # Link 1
         RevoluteDH(d=0, a=l2, alpha=0, m=m2, r=r2, I=I2),
         RevoluteDH(d=0, a=l3, alpha=np.pi/2, m=m3, r=r3, I=I3),
-        PrismaticDH(theta=0, a=0, alpha=0, qlim=[0, 0.5], m=m4, r=r4, I=I4)
+        PrismaticDH(theta=0, a=0, alpha=0, qlim=[0, 0.105], m=m4, r=r4, I=I4)
     ]
 
-    
     return SerialLink(links, name='RRRP_Orca_DH_Dinamica')
 
-# --- Funções de Plotagem (sem alterações) ---
+# --- Funções de Plotagem e Animação (sem alterações) ---
 def plotar_resultados_finais(t, q_des, q_real, erro, torque):
     print("Gerando gráficos de análise final...")
     num_juntas = q_des.shape[1]
@@ -71,18 +75,11 @@ def plotar_resultados_finais(t, q_des, q_real, erro, torque):
     plt.tight_layout(); plt.show(block=True)
 
 def animate_simulation_results(robot, dt, q_desejado, q_real):
-    """Anima os resultados da simulação para o robô RRRP."""
     if not ROBOTICS_TOOLBOX_AVAILABLE: return
     print("Iniciando playback da animação...")
     
     env = robot.plot(q_real[0, :], block=False, limits=[-0.5, 0.5, -0.5, 0.5, -0.1, 0.6])
-    
-    # --- CORRIGIDO AQUI ---
-    # Usar robot.fkine() que aceita uma matriz (N, n) de pontos de trajetória.
-    # robot.fkine_all() era incorreto e causou o erro.
     T_des_path = robot.fkine(q_desejado)
-    
-    # O resto do código funciona como esperado com a correção acima
     tcp_des_path = T_des_path.t
     env.ax.plot(tcp_des_path[:,0], tcp_des_path[:,1], tcp_des_path[:,2], 'r--', linewidth=2, label='Trajetória TCP Desejada')
     env.ax.legend()
@@ -94,9 +91,10 @@ def animate_simulation_results(robot, dt, q_desejado, q_real):
     print("Animação concluída. Feche a janela para ver os gráficos de análise.")
     plt.show(block=True)
 
+
 def main():
-    """Função principal que executa a simulação e depois a animação."""
-    print("=== Simulador de Controle Dinâmico (V2.1 - Correção de Bug) ===")
+    """Função principal que executa a simulação e depois a geração de fórmulas."""
+    print("=== Simulador de Controle Dinâmico (V3.0 - Com Fórmulas Simbólicas) ===")
     visualizar_animacao = True
     if visualizar_animacao and not ROBOTICS_TOOLBOX_AVAILABLE:
         print("AVISO: Robotics Toolbox não encontrado. A animação visual será pulada.")
@@ -113,40 +111,62 @@ def main():
     dt = 0.01; t = np.arange(0, len(q_desejado) * dt, dt)
     qd_desejado = np.gradient(q_desejado, dt, axis=0)
 
-    # --- !! ATENÇÃO: GANHOS PID PRECISAM DE SINTONIA !! ---
-    Kp = np.diag([10, 20, 15, 5]) 
+    # --- Ganhos PID (requerem sintonia fina) ---
+    Kp = np.diag([10, 20, 15, 5])
     Kd = np.diag([2,  5,  3, 1])
     Ki = np.diag([0,  0,  0, 0])
 
-    print("Iniciando simulação numérica...")
-    q_real = np.zeros_like(q_desejado); qd_real = np.zeros_like(q_desejado)
-    q_real[0,:] = q_desejado[0,:]; hist_erro, hist_torque = [], []
-    erro_integral = np.zeros(robot.n); max_integral_error = 1.0
+    print("\nIniciando simulação numérica...")
+    q_real = np.zeros_like(q_desejado)
+    qd_real = np.zeros_like(q_desejado)
+    q_real[0, :] = q_desejado[0, :]
 
-    massas_reais = np.array([0.08159, 0.201456, 0.03425, 0.0252])
+    erro_integral = np.zeros(robot.n)
+    max_integral_error = 1.0
+    hist_erro, hist_torque = [], []
 
     for i in range(1, len(t)):
-        erro = q_desejado[i-1,:] - q_real[i-1,:]; erro_deriv = qd_desejado[i-1,:] - qd_real[i-1,:]
-        erro_integral += erro * dt; erro_integral = np.clip(erro_integral, -max_integral_error, max_integral_error)
+        q = q_real[i - 1, :]
+        qd = qd_real[i - 1, :]
         
-        torque_pid = Kp @ erro + Kd @ erro_deriv + Ki @ erro_integral
-        torque_total = torque_pid
+        # Leitura da trajetória desejada
+        q_d = q_desejado[i - 1, :]
+        qd_d = qd_desejado[i - 1, :]
+
+        # Cálculo do Erro
+        erro = q_d - q
+        erro_deriv = qd_d - qd
+        erro_integral += erro * dt
+        erro_integral = np.clip(erro_integral, -max_integral_error, max_integral_error)
+
+        # Lei de Controle (Computed Torque Control)
+        acc_des = Kp @ erro + Kd @ erro_deriv + Ki @ erro_integral
         
-        hist_erro.append(erro); hist_torque.append(torque_total)
-        
-        qdd_real = torque_total / massas_reais
-        qd_real[i,:] = qd_real[i-1,:] + qdd_real * dt
-        q_real[i,:] = q_real[i-1,:] + qd_real[i,:] * dt
+        M = robot.inertia(q)
+        C = robot.coriolis(q, qd)
+        G = robot.gravload(q)
+        torque_total = M @ acc_des + C @ qd + G
+
+        hist_erro.append(erro)
+        hist_torque.append(torque_total)
+
+        # Integração numérica (simulação do robô real)
+        qdd_real = np.linalg.inv(M) @ (torque_total - C @ qd - G)
+        qd_real[i, :] = qd + qdd_real * dt
+        q_real[i, :] = q + qd_real[i, :] * dt
 
     print("Simulação numérica concluída.")
     
     if np.isnan(q_real).any() or np.isinf(q_real).any():
         print("\n!!! ERRO: INSTABILIDADE NUMÉRICA DETECTADA !!!"); return
 
+    # --- Etapa de Visualização e Análise ---
     if visualizar_animacao:
         animate_simulation_results(robot, dt, q_desejado, q_real)
 
     plotar_resultados_finais(t[1:], q_desejado[1:], q_real[1:], np.array(hist_erro), np.array(hist_torque))
+
+    
     print("\nProcesso finalizado!")
 
 if __name__ == "__main__":

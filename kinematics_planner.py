@@ -48,11 +48,12 @@ def generate_matlab_like_trajectory(N=100):
     l2 = 0.3
     
     # 1. Trajetória cartesiana desejada para a posição X (como no MATLAB)
-    x_desejado = np.linspace(0.2, 0.2 + 0.3, N)
-    
+    x_desejado = np.linspace(0.105, 0.105 + 0.3, N)    
     # 2. Movimentos das juntas definidos como no MATLAB
     q1_vals = np.zeros(N)
-    q2_vals = np.linspace(np.pi/2, 0, N) # de 90 a 0 graus
+    q2_vals = np.zeros(N)
+    for i in range(N):
+        q2_vals[i] = np.arcsin(1-i/(N-1))
     q3_vals = np.pi/2 - q2_vals
     
     # 3. Cálculo de q4 usando a fórmula exata do MATLAB
@@ -61,7 +62,7 @@ def generate_matlab_like_trajectory(N=100):
     
     # 4. Monta a matriz de trajetória Q
     Q = np.vstack([q1_vals, q2_vals, q3_vals, q4_vals]).T
-    
+
     return Q
 
 def main():
