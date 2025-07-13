@@ -1,211 +1,202 @@
-# RRRP - Planejamento, Simulação e Dinâmica Simbólica
+# Simulação e Análise Dinâmica de Robô RRRP
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Ativo-brightgreen?style=for-the-badge)
 
-Este repositório reúne três scripts Python para geração de trajetórias, simulação de controle e análise simbólica de um robô 4-DOF do tipo RRRP (Rotação–Rotação–Rotação–Prismática). Cada ferramenta atua em uma etapa distinta do fluxo de trabalho, desde a definição geométrica até a extração das equações de torque.
+Este repositório oferece um conjunto de ferramentas em Python para o ciclo completo de análise de um robô manipulador 4-DOF do tipo **RRRP** (Rotacional-Rotacional-Rotacional-Prismático). O projeto é ideal para estudantes, pesquisadores e entusiastas da robótica que desejam explorar desde o planejamento da trajetória no espaço cartesiano até a derivação simbólica das equações de movimento e a simulação de controle dinâmico.
 
----
-
-## Índice
-
-* [Visão Geral](#visão-geral)
-* [Estrutura do Repositório](#estrutura-do-repositório)
-* [Pré-requisitos](#pré-requisitos)
-* [Instalação](#instalação)
-* [Fluxo de Trabalho](#fluxo-de-trabalho)
-* [Descrição Detalhada dos Scripts](#descrição-detalhada-dos-scripts)
-
-  * [1. kinematics\_planner.py](#1-kinematics_plannerpy)
-  * [2. controller\_simulation.py](#2-controller_simulationpy)
-  * [3. gerador\_simbolico\_puro.py](#3-gerador_simbolico_puropy)
-* [Exemplos de Execução](#exemplos-de-execução)
-* [Interpretando Resultados](#interpretando-resultados)
-* [Configurações e Parâmetros](#configurações-e-parâmetros)
-* [Contribuições](#contribuições)
-* [Contato](#contato)
+![Animação do Robô RRRP](https://i.imgur.com/your_animation.gif) 
+> **Nota:** Recomenda-se substituir o link acima por um GIF gerado a partir da animação do `controller_simulation.py` para uma demonstração visual impactante.
 
 ---
 
-## Visão Geral
+## 📜 Índice
 
-1. **Modelagem Cinemática**: com `kinematics_planner.py`, define-se o modelo DH e gera-se, por aproximação cartesiana, a trajetória desejada das juntas.
-2. **Simulação Dinâmica e Controle**: em `controller_simulation.py`, implementa-se um controlador PID completo, simula-se numericamente a dinâmica (inércia, Coriolis, gravidade), e avalia-se o desempenho via gráficos e métricas.
-3. **Dinâmica Simbólica**: com `gerador_simbolico_puro.py`, obtém-se as matrizes M(q), C(q,q̇), G(q) e equações de torque τ = M·q̈ + C·q̇ + G em forma simbólica, permitindo análise teórica e validação de parâmetros.
+* [Visão Geral do Projeto](#-visão-geral-do-projeto)
+* [Estrutura do Repositório](#-estrutura-do-repositório)
+* [Configuração do Ambiente](#-configuração-do-ambiente)
+* [Fluxo de Trabalho em 3 Passos](#-fluxo-de-trabalho-em-3-passos)
+* [Descrição Detalhada dos Scripts](#-descrição-detalhada-dos-scripts)
+  * [1. `kinematics_planner.py`](#1-kinematics_plannerpy)
+  * [2. `controller_simulation.py`](#2-controller_simulationpy)
+  * [3. `gerador_simbolico_puro.py`](#3-gerador_simbolico_puropy)
+* [Como Executar](#-como-executar)
+* [Interpretando os Resultados](#-interpretando-os-resultados)
+* [Licença](#-licença)
+* [Contato](#-contato)
 
 ---
 
-## Estrutura do Repositório
+## 🔭 Visão Geral do Projeto
 
-```text
+Este projeto está dividido em três ferramentas principais, cada uma responsável por uma etapa crucial da análise robótica:
+
+| Ferramenta | Objetivo |
+| :--- | :--- |
+| 🗺️ **Planejamento Cinemático** | `kinematics_planner.py`: Define uma trajetória suave para o efetuador final (TCP) no espaço cartesiano e, através da cinemática inversa, gera o arquivo com a sequência de posições desejadas para cada junta (`trajetoria_desejada.npy`). |
+| ⚙️ **Simulação e Controle** | `controller_simulation.py`: Utiliza a trajetória gerada como entrada para um sistema de controle dinâmico. Simula o comportamento real do robô sob a ação de um controlador PID, considerando as forças de inércia, Coriolis e gravidade. Oferece uma rica análise de performance com gráficos, animação 3D e métricas estatísticas. |
+| 🔬 **Análise Simbólica** | `gerador_simbolico_puro.py`: Deriva matematicamente as equações completas da dinâmica do robô usando álgebra simbólica. Gera as matrizes de Inércia `M(q)`, Coriolis `C(q, q̇)` e o vetor de Gravidade `G(q)`, essenciais para validação teórica, publicações acadêmicas e desenvolvimento de controladores avançados. |
+
+---
+
+## 🗂️ Estrutura do Repositório
+
+```
+rrrp-simulation/
+│
 ├── data/
-│   └── trajetoria_desejada.npy    # Saída do planejador de cinemática
-│   └── resultados_simulacao/      # (opcional) logs e CSVs de saída
-├── kinematics_planner.py         # Geração de trajetória
-├── controller_simulation.py      # Simulação de controle dinâmico
-├── gerador_simbolico_puro.py     # Derivação simbólica da dinâmica
-├── requirements.txt              # Dependências Python
-└── README.md                     # Documentação
+│   └── trajetoria_desejada.npy    # Arquivo de saída do planejador (Entrada da simulação)
+│
+├── docs/
+│   └── rrrp_animation.gif         # (Opcional) Local sugerido para o GIF de animação
+│
+├── kinematics_planner.py         # Script 1: Geração de trajetória
+├── controller_simulation.py      # Script 2: Simulação de controle dinâmico
+├── gerador_simbolico_puro.py     # Script 3: Derivação simbólica da dinâmica
+├── requirements.txt              # Dependências do projeto Python
+└── README.md                     # Esta documentação
 ```
 
 ---
 
-## Pré-requisitos
+## 셋업 Configuração do Ambiente
 
-* Python 3.8+
-* `pip install -r requirements.txt`
+### Pré-requisitos
+* Python 3.8 ou superior
+* Git
 
-**`requirements.txt`**
+### Instalação
+Siga os passos abaixo para configurar seu ambiente de desenvolvimento.
 
-```
-numpy
-sympy
-matplotlib
-roboticstoolbox-python
-spatialmath-python
-scipy
-pandas
-scikit-learn
-```
+1.  **Clone o repositório:**
+    ```bash
+    git clone [https://github.com/MHC-CodeSmith/rrrp-simulation.git](https://github.com/MHC-CodeSmith/rrrp-simulation.git)
+    cd rrrp-simulation
+    ```
 
----
+2.  **Crie e ative um ambiente virtual** (altamente recomendado):
+    ```bash
+    # Criar o ambiente
+    python3 -m venv venv
 
-## Instalação
+    # Ativar no Linux/macOS
+    source venv/bin/activate
 
-1. Clone o repositório:
+    # Ativar no Windows (PowerShell/CMD)
+    .\venv\Scripts\activate
+    ```
 
-   ```bash
-   ```
-
-git clone [https://github.com/seu-usuario/rrrp-simulation.git](https://github.com/seu-usuario/rrrp-simulation.git)
-cd rrrp-simulation
-
-````
-2. Crie e ative um ambiente virtual (opcional, mas recomendado):
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-venv\Scripts\activate     # Windows
-````
-
-3. Instale as dependências:
-
-   ```bash
-   ```
-
-pip install -r requirements.txt
-
-````
+3.  **Instale as dependências** listadas no `requirements.txt`:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    O arquivo `requirements.txt` contém:
+    ```
+    numpy
+    sympy
+    matplotlib
+    roboticstoolbox-python
+    spatialmath-python
+    scipy
+    pandas
+    scikit-learn
+    ```
 
 ---
 
-## Fluxo de Trabalho
+## 🚀 Fluxo de Trabalho em 3 Passos
 
-1. **Planejamento Cinêmatico**: define o modelo e gera a trajetória de referência.
-2. **Simulação de Controle**: executa a simulação PID usando como entrada a trajetória gerada.
-3. **Análise Simbólica**: extrai e verifica as equações de dinâmica para pesquisa ou publicação.
+O fluxo de trabalho foi projetado para ser sequencial e intuitivo:
 
----
+**Passo 1: Planejar** ➡️ **Passo 2: Simular** ➡️ **Passo 3: Analisar (Opcional)**
 
-## Descrição Detalhada dos Scripts
-
-### 1. kinematics_planner.py
-
-- **Objetivo**: gerar `trajetoria_desejada.npy`, uma matriz Q com dimensões (N×4), onde cada linha representa [θ₁, θ₂, θ₃, d₄] desejados.
-- **Principais Funções**:
-- `create_rrrp_robot_from_dh()`: monta o modelo DH para validação (se Toolbox disponível).
-- `generate_trajectory(N)`:
- 1. Define um deslocamento linear no TCP ao longo do eixo X usando `linspace`.
- 2. Calcula q₂ via arcsin para manter trajetória curva, q₃ como complemento π/2−q₂.
- 3. Ajusta q₄ para compensar a extensão prismática necessária.
- 4. Retorna Q = [zeros, q₂, q₃, q₄].
-- `main()`: chama gerar trajetória e salva o array NumPy.
-
-### 2. controller_simulation.py
-
-- **Objetivo**: simular o comportamento dinâmico do robô sob controle PID e avaliar precisão de seguimento.
-- **Processo Interno**:
-1. **Carregamento da Trajetória**: lê `trajetoria_desejada.npy` e fixa θ₁=0.
-2. **Cálculo de Derivadas**: obtém velocidades (`gradient`) e acelerações desejadas.
-3. **Ganho PID**: matrizes Kp, Kd, Ki definem o desempenho (overshoot, tempo de assentamento).
-4. **Loop de Simulação** (passo a passo):
-  - Calcula erro, erro derivativo e integral.
-  - Compensa aceleração desejada: `acc_des = Kp·erro + Kd·derr + Ki·∫erro`.
-  - Usa M(q), C(q,qd), G(q) do modelo para calcular torque: `τ = M·acc_des + C·qd + G`.
-  - Integra numericamente qdd → qd → q.
-5. **Animação (opcional)**: exibe modelo 3D via Robotics Toolbox.
-6. **Plotagem**: gera gráficos de:
-  - Posições desejada vs. real.
-  - Erro de seguimento.
-  - Torque aplicado.
-  - Análise avançada: overshoot, erro em regime, tempo de estabilização, histograma e estatísticas.
-
-### 3. gerador_simbolico_puro.py
-
-- **Objetivo**: derivar simbolicamente toda a dinâmica para validação teórica.
-- **Passos Principais**:
-1. Definição de variáveis simbólicas (q(t), q̇, q̈, parâmetros físicos e tensores de inércia).
-2. Cálculo de transformações DH (matrizes T01, T12, T23, T34).
-3. Velocidades lineares e angulares de cada elo.
-4. Energia cinética (translacional + rotacional) e potencial gravitacional.
-5. Derivação das matrizes M(q), G(q) e montagem de C(q,q̇) via símbolos de Christoffel.
-6. Simplificação trigonométrica e montagem do vetor τ = M·q̈ + C·q̇ + G.
-7. Substituição θ₁=0, q̇₁=0, q̈₁=0 para exibir as fórmulas finais.
-
-- **Saída**: matrizes e expressões no terminal; ideal para conferência com trabalhos acadêmicos.
+1.  Execute `kinematics_planner.py` para gerar o arquivo `data/trajetoria_desejada.npy`.
+2.  Execute `controller_simulation.py`, que carregará automaticamente o arquivo da etapa anterior para rodar a simulação de controle.
+3.  Execute `gerador_simbolico_puro.py` a qualquer momento para obter as equações matemáticas que governam o sistema, para fins de estudo ou validação.
 
 ---
 
-## Exemplos de Execução
+##  детальное Descrição Detalhada dos Scripts
+
+### 1. `kinematics_planner.py`
+
+- **Finalidade**: Criar um caminho suave para o robô seguir.
+- **Entrada Principal**: Nenhum arquivo, os parâmetros da trajetória são definidos no próprio código.
+- **Lógica**:
+    1.  Define uma trajetória linear para a ponta do robô (TCP) no espaço.
+    2.  Usa cinemática inversa simplificada para calcular os ângulos das juntas `θ₂`, `θ₃` e a extensão `d₄` necessárias para realizar esse movimento.
+    3.  A junta da base `θ₁` é mantida em zero.
+- **Saída Principal**: O arquivo `data/trajetoria_desejada.npy`, que é uma matriz `(N, 4)` representando a sequência de estados desejados `[θ₁, θ₂, θ₃, d₄]`.
+
+### 2. `controller_simulation.py`
+
+- **Finalidade**: Testar quão bem o robô consegue seguir a trajetória planejada, considerando a física do mundo real (massas, inércia, etc.).
+- **Entrada Principal**: `data/trajetoria_desejada.npy`.
+- **Lógica**:
+    1.  **Carrega** a trajetória desejada.
+    2.  **Define Ganhos PID**: As matrizes `Kp`, `Kd`, `Ki` são o "cérebro" do controlador, ajustadas para otimizar a resposta.
+    3.  **Inicia o Loop de Simulação**: Para cada passo de tempo `dt`:
+        - Calcula o erro entre a posição desejada e a real.
+        - A lei de controle PID calcula o torque/força necessários para corrigir esse erro.
+        - A dinâmica do robô (usando as matrizes `M`, `C`, `G`) determina como o robô realmente acelera sob a ação desse torque.
+        - Aceleração é integrada para obter a nova velocidade e posição.
+- **Saídas Principais**:
+    - **Animação 3D** da trajetória (requer Robotics Toolbox).
+    - **Painéis de Gráficos** detalhados para análise de performance, erro e torque.
+    - **Métricas Estatísticas** impressas no terminal.
+
+### 3. `gerador_simbolico_puro.py`
+
+- **Finalidade**: Prover uma "prova matemática" do modelo dinâmico do robô.
+- **Entrada Principal**: Nenhuma.
+- **Lógica**:
+    1.  Usa a biblioteca `SymPy` para tratar todas as variáveis (ângulos, massas, comprimentos) como símbolos matemáticos, não como números.
+    2.  Aplica os princípios da mecânica Lagrangiana ou Newton-Euler passo a passo.
+    3.  Calcula as energias cinética e potencial para derivar as equações.
+- **Saída Principal**: **Expressões matemáticas** puras para as matrizes `M(q)`, `C(q, q̇)` e `G(q)`, impressas no terminal. Ideal para conferir com a literatura ou usar em um artigo científico.
+
+---
+
+## ▶️ Como Executar
+
+> Certifique-se de que seu ambiente virtual (`venv`) está ativado.
 
 ```bash
-# 1) Planejar cinemática
-env/bin/python kinematics_planner.py
-# gera: data/trajetoria_desejada.npy
+# 1. Gerar a trajetória
+python kinematics_planner.py
 
-# 2) Simular controle
-env/bin/python controller_simulation.py
-# exibe animação, salva gráficos e imprime métricas
+# 2. Rodar a simulação de controle
+python controller_simulation.py
 
-# 3) Gerar dinâmica simbólica
-env/bin/python gerador_simbolico_puro.py
-# imprime passo a passo e fórmulas finais
-````
+# 3. (Opcional) Gerar as equações simbólicas
+python gerador_simbolico_puro.py
+```
 
 ---
 
-## Interpretando Resultados
+## 📊 Interpretando os Resultados
 
-* **trajetoria\_desejada.npy**: array N×4. Use NumPy para carregar e inspecionar:
-
-  ```python
-  import numpy as np
-  Q = np.load('data/trajetoria_desejada.npy')
-  print(Q[:5])  # primeiros 5 pontos
-  ```
-* **Gráficos de Simulação**:
-
-  * Deslocamento das juntas: avalie seguimento (curvas desejada vs. real).
-  * Erro de seguimento: identifique oscilações e estabilidade.
-  * Torque: analise picos de torque e possíveis saturações.
-* **Métricas** (controller\_simulation): overshoot, erro em estado estacionário e tempo de assentamento.
-* **Expressões Simbólicas**: confira coerência com literatura e use em publicações.
+* **Arquivo `.npy`**: Carregue-o com NumPy para análise:
+    ```python
+    import numpy as np
+    q_des = np.load('data/trajetoria_desejada.npy')
+    print("Formato do array:", q_des.shape)
+    ```
+* **Gráficos da Simulação**: Avalie visualmente a sobreposição das curvas "Desejada" vs. "Real". Um bom controle minimiza a diferença entre elas.
+* **Métricas de Performance**: Busque por `Sobressinal` baixo, `Erro de Regime` próximo de zero e `Tempo de Estabilização` rápido.
+* **Painel de Análise de Erro**: O histograma do erro deve ser um pico fino e alto centrado em zero. O desvio padrão móvel deve ser baixo e estável após o transitório inicial.
 
 ---
 
-## Configurações e Parâmetros
+## 📝 Licença
 
-* **Número de Pontos (N)**: ajuste em `generate_trajectory(N)` para resolução da trajetória.
-* **Ganho PID**: valores padrão em `controller_simulation.py` servem como ponto de partida; re-tune conforme carga e resposta desejada.
-* **Limites de Junta Prismática**: \[0, 0.105] m — altere em ambos os scripts se o robô físico tiver alcance diferente.
+Este projeto é distribuído sob a Licença MIT. Veja o arquivo `LICENSE` para mais detalhes. Sinta-se à vontade para usar, modificar e distribuir este código para fins educacionais e de pesquisa.
 
 ---
 
-## Contribuições
-
-Pull requests são bem-vindos! Para melhorias de estabilidade, novos controladores ou suporte a outros robôs, abra uma issue ou PR.
-
----
-
-## Contato
+## 📞 Contato
 
 **Matheus Hipolito Carvalho**
-E-mail: [matheus.hipolito@usp.br](mailto:matheus.hipolito@usp.br)
-GitHub: [github.com/seu-usuario](MHC_CodeSmith)
+
+* **E-mail**: [matheus.hipolito@usp.br](mailto:matheus.hipolito@usp.br)
+* **GitHub**: [MHC-CodeSmith](https://github.com/MHC-CodeSmith)
