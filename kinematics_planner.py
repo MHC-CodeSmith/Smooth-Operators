@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-Simulação do Robô RRRP - kinematics_planner_matlab.py (Versão MATLAB)
-
-Autor: André MK022 (Cuca) - Adaptado por Gemini para replicar a lógica do MATLAB.
-Descrição: Implementa a geração de trajetória seguindo exatamente as regras e
-parâmetros do script MATLAB fornecido pelo usuário.
+Descrição: Implementa a geração de trajetória
 """
 import numpy as np
 
@@ -17,12 +13,11 @@ except ImportError:
 
 def create_rrrp_robot_from_dh():
     """
-    Cria um robô RRRP com base nos parâmetros DH do script MATLAB.
+    Cria um robô RRRP com base nos parâmetros DH
     """
-    # --- PARÂMETROS IGUAIS AO MATLAB ---
     l2 = 0.3
-    l3 = 0.03  # Valor usado no MATLAB
-    d4_lim = [0, 0.105] # Limites usados no MATLAB
+    l3 = 0.03  
+    d4_lim = [0, 0.105] # Limites usados 
     
     links = []
     if ROBOTICS_TOOLBOX_AVAILABLE:
@@ -38,25 +33,25 @@ def create_rrrp_robot_from_dh():
 
     return robot_model, l2, l3
 
-def generate_matlab_like_trajectory(N=100):
+def generate_trajectory(N=100):
     """
-    Gera a trajetória usando a lógica de cálculo do script MATLAB.
+    Gera a trajetória usando a lógica de cálculo 
     """
-    print("Gerando trajetória com a lógica do MATLAB...")
+    print("Gerando trajetória...")
 
     # Parâmetros usados no cálculo
     l2 = 0.3
     
-    # 1. Trajetória cartesiana desejada para a posição X (como no MATLAB)
+    # 1. Trajetória cartesiana desejada para a posição X 
     x_desejado = np.linspace(0.105, 0.105 + 0.3, N)    
-    # 2. Movimentos das juntas definidos como no MATLAB
+    # 2. Movimentos das juntas definidos
     q1_vals = np.zeros(N)
     q2_vals = np.zeros(N)
     for i in range(N):
         q2_vals[i] = np.arcsin(1-i/(N-1))
     q3_vals = np.pi/2 - q2_vals
     
-    # 3. Cálculo de q4 usando a fórmula exata do MATLAB
+    # 3. Cálculo de q4 usando a fórmula exata da trajetoria
     # q4 = (x_desejado - l2*cos(q2))
     q4_vals = x_desejado - l2 * np.cos(q2_vals)
     
@@ -67,9 +62,9 @@ def generate_matlab_like_trajectory(N=100):
 
 def main():
     """Função principal para gerar e salvar a trajetória."""
-    print("=== Planejador de Trajetória (Lógica MATLAB) ===")
+    print("=== Planejador de Trajetória ===")
     
-    q_desejado = generate_matlab_like_trajectory()
+    q_desejado = generate_trajectory()
 
     if q_desejado.size == 0:
         print(f"✗ ERRO: Não foi possível gerar a trajetória.")

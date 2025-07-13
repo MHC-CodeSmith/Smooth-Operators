@@ -2,7 +2,6 @@
 """
 Exibidor de Dinâmica Simbólica Genérica para o Robô RRRP (com Inércias)
 
-Autor: Gemini, com base na mecânica de Lagrange.
 Descrição:
 Este script deriva as equações completas da dinâmica (translação + rotação)
 de um robô RRRP de forma totalmente simbólica. Os resultados são então
